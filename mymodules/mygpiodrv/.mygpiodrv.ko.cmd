@@ -1,0 +1,1 @@
+cmd_/home/user/mymodules/mygpiodrv/mygpiodrv.ko := ld -r -m elf_x86_64  -z max-page-size=0x200000 -T ./scripts/module-common.lds --build-id  -o /home/user/mymodules/mygpiodrv/mygpiodrv.ko /home/user/mymodules/mygpiodrv/mygpiodrv.o /home/user/mymodules/mygpiodrv/mygpiodrv.mod.o ;  true

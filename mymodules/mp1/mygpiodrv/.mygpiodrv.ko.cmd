@@ -1,0 +1,1 @@
+cmd_/home/user/mymodules/mp1/mygpiodrv/mygpiodrv.ko := arm-openstlinux_weston-linux-gnueabi-ld -r  -EL -T ./scripts/module-common.lds -T ./arch/arm/kernel/module.lds  --build-id  -o /home/user/mymodules/mp1/mygpiodrv/mygpiodrv.ko /home/user/mymodules/mp1/mygpiodrv/mygpiodrv.o /home/user/mymodules/mp1/mygpiodrv/mygpiodrv.mod.o ;  true
