@@ -1,17 +1,13 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
-#include <linux/kdev_t.h>
-#include <linux/device.h>
-#include <linux/cdev.h>
 #include <linux/fs.h>
 #include <linux/ioctl.h>
 #include <linux/uaccess.h>
 #include <linux/delay.h>
 #include <asm/errno.h>
 #include <linux/gpio.h>
-#include <linux/interrupt.h> 
-#include "dev.h"
+#include "../dev.h"
 
 MODULE_LICENSE( "GPL" );
 MODULE_AUTHOR( "Vladimir Vorobyev <vlad_vorobyev@mail.ru>" );
@@ -26,7 +22,6 @@ static ssize_t
 device_write(struct file *file,
             const char __user * buffer, size_t length, loff_t * offset);
 static long device_ioctl( struct file *f, unsigned int cmd, unsigned long arg);
-static irq_handler_t irqHandler(unsigned int irq, void *dev_id, struct pt_regs *regs);
 
 static struct gpio leds_gpios[] = {
 	{ 80, GPIOF_OUT_INIT_LOW, "PORTF00" },
@@ -35,8 +30,7 @@ static struct gpio leds_gpios[] = {
 	{ 86, GPIOF_OUT_INIT_LOW, "PORTF06" },
 	{ 87, GPIOF_OUT_INIT_LOW, "PORTF07" },
 	{ 88, GPIOF_OUT_INIT_LOW, "PORTF08" },
-	{ 89, GPIOF_OUT_INIT_LOW, "PORTF09" },
-	{ 83, GPIOF_OUT_INIT_LOW, "PORTF03" }
+	{ 89, GPIOF_OUT_INIT_LOW, "PORTF09" }
 };
 
 enum hd44780_pin {
@@ -47,7 +41,6 @@ enum hd44780_pin {
 	PIN_DATA5,
 	PIN_DATA6,
 	PIN_DATA7,
-	PIN_IN,
 	PIN_NUM
 };
 
@@ -73,9 +66,6 @@ enum hd44780_pin {
 static int i;
 static uint32_t CUR_POS;
 static dev_t first;
-static struct cdev c_dev;
-static struct class *cl;
-static unsigned int irqNumber;
 
 #define BUF_LEN 80
 static char Message[BUF_LEN];
@@ -186,25 +176,7 @@ static int __init mygpiomodule_init( void ) {
 	{
 		return -1;
 	}
-	if ((cl = class_create(THIS_MODULE, "mygpiodrv")) == NULL)
-	{
-	unregister_chrdev_region(first, 1);
-	return -1;
-	}
-	if (device_create(cl, NULL, first, NULL, "mygpio") == NULL)
-	{
-	class_destroy(cl);
-	unregister_chrdev_region(first, 1);
-	return -1;
-	}
-	cdev_init(&c_dev, &fops);
-	if (cdev_add(&c_dev, first, 1) == -1)
-	{
-	device_destroy(cl, first);
-	class_destroy(cl);
-	unregister_chrdev_region(first, 1);
-	return -1;
-	}
+
 	printk("<1>the driver, create a dev file with\n");
 	printk("'mknod /dev/mygpio c %d 0'.\n", MAJOR_NUM);	
 
@@ -212,10 +184,8 @@ static int __init mygpiomodule_init( void ) {
 }
 
 static void __exit mygpiomodule_exit( void ) {
-	cdev_del(&c_dev);
-	device_destroy(cl, first);
-	class_destroy(cl);
-	unregister_chrdev_region(first, 1);	
+	unregister_chrdev_region(first, 1);
+	
 	printk(KERN_INFO "+> module mygpiomodule unloaded!\n" );
 }
 
@@ -269,7 +239,7 @@ static int device_open(struct inode *inode, struct file *file)
 	if ((!gpio_is_valid(80)) && (!gpio_is_valid(81)) && \
 		(!gpio_is_valid(84)) && (!gpio_is_valid(86)) && \
 		(!gpio_is_valid(87)) && (!gpio_is_valid(88)) && \
-		(!gpio_is_valid(89)) && (!gpio_is_valid(83)))
+		(!gpio_is_valid(89)))
 	{
 	  printk(KERN_ALERT " GPIO numbers not valid.\n");
 	  return -1;
@@ -285,15 +255,7 @@ static int device_open(struct inode *inode, struct file *file)
 		gpio_direction_output(leds_gpios[i].gpio, 0);
 		gpio_set_value(leds_gpios[i].gpio, 0);
 	}
-	gpio_direction_input(leds_gpios[7].gpio);
-	gpio_set_debounce(leds_gpios[7].gpio, 50);          // Set a 50ms debounce, adjust to your needs
-	irqNumber = gpio_to_irq(leds_gpios[7].gpio);
-	ret = request_irq(irqNumber,           // requested interrupt
-                       (irq_handler_t) irqHandler, // pointer to handler function
-                       IRQF_TRIGGER_RISING, // interrupt mode flag
-                       "irqHandler",        // used in /proc/interrupts
-                       NULL);               // the *dev_id shared interrupt lines, NULL is okay
-	void __iomem  *pio = pin_to_controller(leds_gpios[7].gpio);
+	
 	mdelay(200);
 	printk(KERN_INFO "+> mygpio is opened!\n" );
 	return SUCCESS;
@@ -304,12 +266,6 @@ static int device_release(struct inode *inode, struct file *file)
 	gpio_free_array(leds_gpios, ARRAY_SIZE(leds_gpios));
 	printk(KERN_INFO "+> mygpio is closed!\n" );
 	return 0;
-}
-
-static irq_handler_t irqHandler(unsigned int irq, void *dev_id, struct pt_regs *regs)
-{
-	printk(KERN_INFO "+> gpio PF3 is rised!\n" );
-	return (irq_handler_t) IRQ_HANDLED;
 }
 
 module_init( mygpiomodule_init );
